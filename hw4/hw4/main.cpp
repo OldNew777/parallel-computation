@@ -47,26 +47,33 @@ int main(int argc, char **argv) {
     LOG_INFO("x: %s", x.to_string().c_str());
     LOG_INFO("b: %s", b.to_string().c_str());
 
-    SparseVector x_star = x + 0.1;
-//    SparseVector x_star(A.m);
+//    SparseVector x_star = x + 0.1;
+    SparseVector x_star(A.m);
     SparseVector r = b - A * x_star;
-    LOG_INFO("r: %s", r.to_string().c_str());
     SparseVector p = r;
     SparseVector Ap(m);
-    Real r_dot_r = r.dot(r);
+    Real rr = r.dot(r);
     Real alpha, beta;
     int iter = 0;
-    while (r_dot_r > Config::epsilon) {
+    while (sqrt(rr) > Config::epsilon * sqrt(x_star.dot(x_star))) {
+//        LOG_DEBUG("p: %s", p.to_string().c_str());
+//        LOG_DEBUG("rr: %f", rr);
         Ap = A * p;
-        alpha = r_dot_r / p.dot(Ap);
+//        LOG_DEBUG("Ap: %s", Ap.to_string().c_str());
+        alpha = rr / p.dot(Ap);
+//        LOG_DEBUG("alpha: %f", alpha);
 //        x_star += p * (alpha * Config::lr);
         x_star += p * alpha;
-        LOG_INFO("x_star = %s", x_star.to_string().c_str());
+        LOG_DEBUG("x_star = %s", x_star.to_string().c_str());
         r -= Ap * alpha;
-        Real r_dot_r_new = r.dot(r);
-        beta = r_dot_r_new / r_dot_r;
+//        LOG_DEBUG("r: %s", r.to_string().c_str());
+        Real rr_new = r.dot(r);
+//        LOG_DEBUG("rr_new: %f", rr_new);
+        beta = rr_new / rr;
+//        LOG_DEBUG("beta: %f", beta);
+//        LOG_DEBUG("p * beta: %s", (p * beta).to_string().c_str());
         p = r + p * beta;
-        r_dot_r = r_dot_r_new;
+        rr = rr_new;
         ++iter;
     }
     LOG_INFO("Conjugate gradient finished in %d iterations in %.4f seconds", iter, Timer::Toc());

@@ -41,8 +41,8 @@ public:
     int length = 0;
     vector<Real> val;
 
-    [[nodiscard]] explicit SparseVector(int length) : length(length) {
-        val.resize(length, 0.);
+    [[nodiscard]] explicit SparseVector(int length, Real value = 0.) : length(length) {
+        val.resize(length, value);
     }
     [[nodiscard]] SparseVector(const SparseVector &other) = default;
     [[nodiscard]] SparseVector& operator=(const SparseVector &other) = default;
