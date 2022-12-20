@@ -8,7 +8,7 @@ public:
         time_point = std::chrono::high_resolution_clock::now();
     }
 
-    static double Tok() {
+    static double Toc() {
         auto time_point_new = std::chrono::high_resolution_clock::now();
         auto res = (double) (time_point_new - time_point).count() /
                    std::chrono::nanoseconds::period::den;

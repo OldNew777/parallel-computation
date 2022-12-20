@@ -37,7 +37,7 @@ public:
     [[nodiscard]] T *allocate(size_t n) {
         size_t new_size = max(n, default_size);
 
-        static auto new_patch = [this](size_t needed, size_t new_capacity) {
+        static auto new_block = [this](size_t needed, size_t new_capacity) {
             data.emplace_back(new T[new_capacity]);
             occupied.emplace_back(needed);
             capacity.emplace_back(new_capacity);
@@ -47,7 +47,7 @@ public:
 
         // no available memory
         if (q.empty()) {
-            return new_patch(n, new_size);
+            return new_block(n, new_size);
         }
 
         // no enough memory
@@ -55,7 +55,7 @@ public:
         while (iter != q.end() and n + occupied[*iter] > capacity[*iter])
             ++iter;
         if (iter == q.end()) {
-            return new_patch(n, new_size);
+            return new_block(n, new_size);
         }
 
         // enough memory

@@ -37,14 +37,18 @@ SparseVector SparseMatrix::operator*(const SparseVector &x) const {
         SparseVector y_private(this->n);
         int index = 0;
         for (auto& iter_vec : this->row_head) {
-            if (index++ % omp_get_num_threads() != omp_get_thread_num()) {
+            if (index++ % ParallelInfo::n_thread != ParallelInfo::id_thread) {
                 continue;
             }
             for (auto iter_mult = iter_vec.second; iter_mult != nullptr; iter_mult = iter_mult->right) {
                 y_private.val[iter_vec.first] += iter_mult->value * x.val[iter_mult->col];
             }
         }
+#pragma omp critical
         y += y_private;
     }
     return y;
 }
+
+int ParallelInfo::n_thread = omp_get_num_threads();
+int ParallelInfo::id_thread = omp_get_thread_num();
