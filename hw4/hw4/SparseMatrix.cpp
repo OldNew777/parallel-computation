@@ -37,7 +37,7 @@ SparseVector SparseMatrix::operator*(const SparseVector &x) const {
         SparseVector y_private(this->n);
         int index = 0;
         for (auto& iter_vec : this->row_head) {
-            if (index++ % Config::n_thread != Config::id_thread) {
+            if ((index++) % omp_get_num_threads() != omp_get_thread_num()) {
                 continue;
             }
             for (auto iter_mult = iter_vec.second; iter_mult != nullptr; iter_mult = iter_mult->right) {
@@ -50,7 +50,5 @@ SparseVector SparseMatrix::operator*(const SparseVector &x) const {
     return y;
 }
 
-int Config::n_thread = omp_get_num_threads();
-int Config::id_thread = omp_get_thread_num();
 Real Config::epsilon = 1e-6;
 Real Config::lr = 1e-3;

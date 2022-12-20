@@ -14,6 +14,7 @@
 #include "rand_sampler.h"
 #include "pool.h"
 #include "type.h"
+#include "log.h"
 
 //#define DEBUG_FULL_PRINT
 
@@ -125,7 +126,6 @@ public:
 
 class Config {
 public:
-    static int n_thread, id_thread;
     static Real epsilon;
     static Real lr;
 };
@@ -214,17 +214,20 @@ public:
             string line = "\nRow " + std::to_string(iter_x->first) + ": ";
 #ifndef DEBUG_FULL_PRINT
             int n_print_col = 0;
+            bool break_col = false;
 #endif
             for (auto iter_y = iter_x->second; iter_y != nullptr; iter_y = iter_y->right) {
                 line += iter_y->to_string() + " ";
 #ifndef DEBUG_FULL_PRINT
                 if (++n_print_col >= 3) {
+                    break_col = true;
                     break;
                 }
 #endif
             }
 #ifndef DEBUG_FULL_PRINT
-            if (n_print_col < m) {
+            // FIXME: maybe we have printed all cols before
+            if (break_col && n_print_col < m) {
                 auto iter_y = row_tail.at(iter_x->first);
                 line += "... " + iter_y->to_string();
             }
@@ -235,17 +238,20 @@ public:
         string s;
 #ifndef DEBUG_FULL_PRINT
         int n_print_row = 0;
+        bool break_row = false;
 #endif
         for (auto iter_x = row_head.begin(); iter_x != row_head.end(); ++iter_x) {
             s += print_line(iter_x);
 #ifndef DEBUG_FULL_PRINT
             if (++n_print_row >= 3) {
+                break_row = true;
                 break;
             }
 #endif
         }
 #ifndef DEBUG_FULL_PRINT
-        if (n_print_row < n) {
+        // FIXME: maybe we have printed all rows before
+        if (break_row && n_print_row < n) {
             auto iter_x = row_head.begin();
             std::advance(iter_x, n - 1);
             s += "\n..." + print_line(iter_x);

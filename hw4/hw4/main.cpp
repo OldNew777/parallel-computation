@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
     LOG_INFO("x: %s", x.to_string().c_str());
     LOG_INFO("b: %s", b.to_string().c_str());
 
-    SparseVector x_star = x + 1e-3;
+    SparseVector x_star = x + 0.1;
 //    SparseVector x_star(A.m);
     SparseVector r = b - A * x_star;
     LOG_INFO("r: %s", r.to_string().c_str());
