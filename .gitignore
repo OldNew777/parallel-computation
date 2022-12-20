@@ -1,3 +1,10 @@
+ref/
+ssh.txt
+
+*.zip
+*.pdf
+
+
 # Prerequisites
 *.d
 
