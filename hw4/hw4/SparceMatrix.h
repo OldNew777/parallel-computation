@@ -6,58 +6,91 @@
 
 #include <random>
 #include <unordered_map>
-#include <unordered_set>
+#include <map>
+#include <set>
+#include <string>
+
+#include "rand_sampler.h"
+#include "pool.h"
 
 using namespace std;
 
 struct OLNode {
-	int row = 0, col = 0;
-	double value = 0.L;
-	OLNode* right = nullptr, * down = nullptr;
+public:
+    int row = 0, col = 0;
+    double value = 0.L;
+    OLNode *right = nullptr, *down = nullptr;
 
-	~OLNode() {
-        delete right;
-        delete down;
-	}
+public:
+    [[nodiscard]] OLNode() = default;
+
+    [[nodiscard]] string to_string() const {
+        return format("({}, {}, {:.4f})", row, col, value);
+    }
 };
 
-struct CrossList
-{
-	unordered_map<int, OLNode*> row_head, col_head;
-	int n, m, n_nozero;
+class CrossList {
+private:
+    unordered_map<int, OLNode *> row_head, col_head, row_tail, col_tail;
+    int n, m, n_non_zero;
 
-	CrossList(int n, int m, int n_nozero) : n(n), m(m), n_nozero(n_nozero) {
-		auto rand_01 = []() {
-			return double(rand()) / RAND_MAX;
-		};
+public:
+    [[nodiscard]] CrossList(int n, int m, int n_non_zero) : n(n), m(m), n_non_zero(n_non_zero) {
+        auto &sampler = RandSampler::Global();
+        auto &pool = Pool<OLNode>::Global();
 
-		int n_allocated = 0;
-		int64_t nm = int64_t(n) * int64_t(m);
-		for (int i = 0; i < n; ++i) {
-			unordered_set<int> j_allocated;
-			while (true) {
-				double p = double(m - j_allocated.size()) / (nm - n_allocated);
-				if (rand_01() <= p) {
-					++n_allocated;
-					int index = rand() % m;
-					while (j_allocated.find(index) != j_allocated.end())
-						index = rand() % m;
-					j_allocated.emplace(index);
-				}
-				else {
-					break;
-				}
-			}
-			OLNode* node_last = nullptr;
-			for (auto j : j_allocated) {
-				OLNode* node = new OLNode();
-			}
-		}
-	}
-	~CrossList() {
-		for (auto iter : row_head)
-			delete iter.second;
-		for (auto iter : col_head)
-			delete iter.second;
-	}
+        map<int, set<int>> data;
+        for (auto i = 0; i < n_non_zero; ++i) {
+            int row, col;
+            do {
+                row = sampler.rand_int(0, n - 1);
+                col = sampler.rand_int(0, m - 1);
+            } while (data[row].count(col));
+            data[row].insert(col);
+        }
+
+        for (auto i = 0; i < n; ++i) {
+            // save non-zero elements of each row
+            set<int> &j_allocated = data[i];
+
+            // allocate memory for each row
+            OLNode *node_last = nullptr;
+            for (auto j: j_allocated) {
+                auto *node = pool.allocate(1);
+                node->row = i;
+                node->col = j;
+                node->value = sampler.rand_double(-1., 1.);
+                // insert into row
+                if (node_last == nullptr) {
+                    row_head[i] = node;
+                } else {
+                    node_last->right = node;
+                }
+                // insert into col
+                if (col_tail.find(j) == col_tail.end()) {
+                    col_head[j] = node_last;
+                } else {
+                    col_tail[j]->down = node_last;
+                }
+                col_tail[j] = node;
+                node_last = node;
+            }
+            if (node_last != nullptr) {
+                row_tail[i] = node_last;
+            }
+        }
+    }
+
+    [[nodiscard]] string to_string() {
+        string s;
+        for (auto iter_i : row_head) {
+            string line = "Row " + std::to_string(iter_i.first) + ": ";
+            for (auto iter_j = iter_i.second; iter_j != nullptr; iter_j = iter_j->right) {
+                line += iter_j->to_string() + " ";
+            }
+            line += "\n";
+            s += line;
+        }
+        return s;
+    }
 };

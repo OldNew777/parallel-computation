@@ -8,7 +8,10 @@
 #include "timer.h"
 #include "SparceMatrix.h"
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
 
-	return 0;
+    CrossList matrix(100, 100, 5);
+    LOG_DEBUG("%s", matrix.to_string().c_str());
+
+    return 0;
 }
