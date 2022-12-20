@@ -123,9 +123,11 @@ public:
     }
 };
 
-class ParallelInfo {
+class Config {
 public:
     static int n_thread, id_thread;
+    static Real epsilon;
+    static Real lr;
 };
 
 struct SparseMatrix {
@@ -152,9 +154,9 @@ public:
         unordered_map<int, set<int>> data;
         for (auto i = 0; i < n_non_zero; ++i) {
             int row, col;
-            row = sampler.rand_int(0, n - 1);
 
             // Method 1: add 1 if full
+            row = sampler.rand_int(0, n - 1);
             while (data.count(row) && data[row].size() == m)
                 row = (row + 1) % n;
             col = sampler.rand_int(0, m - 1);

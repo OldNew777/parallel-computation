@@ -10,8 +10,6 @@
 #include "cxxopts.hpp"
 
 int n, m, n_non_zero;
-Real epsilon = 1e-6;
-Real learning_rate = 1e-4;
 
 int parse_args(int argc, char *argv[]) {
     cxxopts::Options options(
@@ -50,6 +48,7 @@ int main(int argc, char **argv) {
     LOG_INFO("b: %s", b.to_string().c_str());
 
     SparseVector x_star = x + 1e-3;
+//    SparseVector x_star(A.m);
     SparseVector r = b - A * x_star;
     LOG_INFO("r: %s", r.to_string().c_str());
     SparseVector p = r;
@@ -57,10 +56,10 @@ int main(int argc, char **argv) {
     Real r_dot_r = r.dot(r);
     Real alpha, beta;
     int iter = 0;
-    while (r_dot_r > epsilon) {
+    while (r_dot_r > Config::epsilon) {
         Ap = A * p;
         alpha = r_dot_r / p.dot(Ap);
-//        x_star += p * (alpha * learning_rate);
+//        x_star += p * (alpha * Config::lr);
         x_star += p * alpha;
         LOG_INFO("x_star = %s", x_star.to_string().c_str());
         r -= Ap * alpha;
