@@ -14,7 +14,10 @@ endif()
 set(MAIN_SOURCES
         main.cpp
         log.h log.cpp
-        SparceMatrix.h
+        SparseMatrix.h SparseMatrix.cpp
         timer.h timer.cpp
-        pool.h rand_sampler.h)
+        pool.h
+        rand_sampler.h
+        type.h
+        cxxopts.hpp)
 add_executable(hw4 ${MAIN_SOURCES})

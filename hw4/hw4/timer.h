@@ -9,8 +9,11 @@ public:
     }
 
     static double Tok() {
-        return (double) (std::chrono::high_resolution_clock::now() - time_point).count() /
-               std::chrono::nanoseconds::period::den;
+        auto time_point_new = std::chrono::high_resolution_clock::now();
+        auto res = (double) (time_point_new - time_point).count() /
+                   std::chrono::nanoseconds::period::den;
+        time_point = time_point_new;
+        return res;
     }
 
 private:

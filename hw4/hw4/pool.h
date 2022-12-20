@@ -19,7 +19,7 @@ private:
     vector<size_t> capacity;
     list<size_t> q;
 
-    Pool() = default;
+    [[nodiscard]] explicit Pool() = default;
 
 public:
     Pool(Pool const &) = delete;
@@ -29,24 +29,25 @@ public:
             delete[] p;
     }
 
-    static Pool &Global() {
+    [[nodiscard]] static Pool &Global() {
         static Pool instance;
         return instance;
     }
 
-    T *allocate(size_t n) {
+    [[nodiscard]] T *allocate(size_t n) {
         size_t new_size = max(n, default_size);
-        static auto expand = [this](size_t need, size_t new_size) {
-            data.emplace_back(new T[new_size]);
-            occupied.emplace_back(need);
-            capacity.emplace_back(new_size);
+
+        static auto new_patch = [this](size_t needed, size_t new_capacity) {
+            data.emplace_back(new T[new_capacity]);
+            occupied.emplace_back(needed);
+            capacity.emplace_back(new_capacity);
             q.emplace_back(data.size() - 1);
             return data.back();
         };
 
         // no available memory
         if (q.empty()) {
-            return expand(n, new_size);
+            return new_patch(n, new_size);
         }
 
         // no enough memory
@@ -54,7 +55,7 @@ public:
         while (iter != q.end() and n + occupied[*iter] > capacity[*iter])
             ++iter;
         if (iter == q.end()) {
-            return expand(n, new_size);
+            return new_patch(n, new_size);
         }
 
         // enough memory
