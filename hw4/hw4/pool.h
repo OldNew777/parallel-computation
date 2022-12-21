@@ -34,6 +34,10 @@ public:
         return instance;
     }
 
+    void deallocate(T *ptr, size_t n) {
+        // TODO
+    }
+
     [[nodiscard]] T *allocate(size_t n) {
         size_t new_size = max(n, default_size);
 

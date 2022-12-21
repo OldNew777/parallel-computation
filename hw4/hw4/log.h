@@ -13,7 +13,6 @@ enum LOG_COLOR {
 };
 
 void log_by_level(int level, const char *msg, ...);
-void set_log_level(int level);
 
 #define LOG_DEBUG(msg, ...) log_by_level(LOG_COLOR::DEBUG, msg, ##__VA_ARGS__)
 #define LOG_INFO(msg, ...) log_by_level(LOG_COLOR::INFO, msg, ##__VA_ARGS__)

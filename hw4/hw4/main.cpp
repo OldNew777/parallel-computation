@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
     Real rr = r.dot(r);
     Real alpha, beta;
     int iter = 0;
-    while (sqrt(rr) > Config::epsilon * sqrt(x_star.dot(x_star))) {
+    while (sqrt(rr) > Config::epsilon) {
 //        LOG_DEBUG("p: %s", p.to_string().c_str());
 //        LOG_DEBUG("rr: %f", rr);
         Ap = A * p;

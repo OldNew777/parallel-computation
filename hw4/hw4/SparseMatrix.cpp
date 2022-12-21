@@ -50,4 +50,4 @@ SparseVector SparseMatrix::operator*(const SparseVector &x) const {
     return y;
 }
 
-Real Config::epsilon = 1e-4;
+Real Config::epsilon = 1e-3;

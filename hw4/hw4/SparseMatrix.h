@@ -134,14 +134,88 @@ struct SparseMatrix {
 public:
     unordered_map<int, OLNode *> row_head, col_head, row_tail, col_tail;
     int n, m;
+    vector<Real> col_abs_sum;
 
 public:
     SparseMatrix(const SparseMatrix &other) = delete;
     SparseMatrix &operator=(const SparseMatrix &other) = delete;
 
-    [[nodiscard]] SparseMatrix(int n, int m) : n(n), m(m) {}
+    [[nodiscard]] SparseMatrix(int n, int m) : n(n), m(m) {
+        col_abs_sum.resize(m, 0.);
+    }
 
     [[nodiscard]] SparseVector operator*(const SparseVector& x) const;
+
+    bool insert(int i, int j, Real value) {
+        if (i < 0 || i >= n || j < 0 || j >= m) {
+            throw runtime_error("index out of range in SparseMatrix.insert");
+        }
+        auto &pool = Pool<OLNode>::Global();
+
+        auto create_node = [&]() {
+            auto *node = pool.allocate(1);
+            node->row = i;
+            node->col = j;
+            node->value = value;
+            return node;
+        };
+        auto *node = create_node();
+        col_abs_sum[j] += fabs(value);
+
+        // insert into row
+        if (row_head.count(i) == 0) {
+            row_head[i] = node;
+            row_tail[i] = node;
+        } else if (OLNode *head = row_head[i]; head->col > j) {
+            node->right = head;
+            row_head[i] = node;
+        } else {
+            OLNode *ptr = row_head[i];
+            while (ptr->right != nullptr && ptr->right->col <= j) {
+                ptr = ptr->right;
+            }
+            // ptr->col <= j
+            if (ptr->col == j) {
+                ptr->value = value;
+                pool.deallocate(node, 1);
+                return false;
+            } else {
+                node->right = ptr->right;
+                ptr->right = node;
+                if (row_tail[i]->col < j) {
+                    row_tail[i] = node;
+                }
+            }
+        }
+
+        // insert into col
+        if (col_head.count(j) == 0) {
+            col_head[j] = node;
+            col_tail[j] = node;
+        } else if (OLNode *head = col_head[j]; head->row > i) {
+            node->down = head;
+            col_head[j] = node;
+        } else {
+            OLNode *ptr = col_head[j];
+            while (ptr->down != nullptr && ptr->down->row <= i) {
+                ptr = ptr->down;
+            }
+            // ptr->row <= i
+            if (ptr->row == i) {
+                ptr->value = value;
+                pool.deallocate(node, 1);
+                return false;
+            } else {
+                node->down = ptr->down;
+                ptr->down = node;
+                if (col_tail[j]->row < i) {
+                    col_tail[j] = node;
+                }
+            }
+        }
+
+        return true;
+    }
 
     void random(int n_non_zero) {
         if (n_non_zero > int64_t(n) * int64_t(m)) {
@@ -152,7 +226,11 @@ public:
         auto &pool = Pool<OLNode>::Global();
 
         unordered_map<int, set<int>> data;
-        for (auto i = 0; i < n_non_zero; ++i) {
+        int n_diag = min(min(n, m), n_non_zero);
+        for (int i = 0; i < n_diag; ++i) {
+            data[i].insert(i);
+        }
+        for (auto i = 0; i < n_non_zero - n_diag; ++i) {
             int row, col;
 
             // Method 1: add 1 if full
@@ -160,51 +238,35 @@ public:
             while (data.count(row) && data[row].size() == m)
                 row = (row + 1) % n;
             col = sampler.rand_int(0, m - 1);
-            while (data.count(row) && data[row].count(col))
+            while (data[row].count(col))
                 col = (col + 1) % m;
-//            // Method 2: reject sampling
-//            do {
-//                row = sampler.rand_int(0, n - 1);
-//            } while (data.count(row) && data[row].size() == m);
-//            do {
-//                col = sampler.rand_int(0, m - 1);
-//            } while (data.count(row) && data[row].count(col));
 
             data[row].insert(col);
         }
 
+        // allocate memory
         for (auto i = 0; i < n; ++i) {
             if (!data.count(i)) {
                 continue;
             }
-
-            // save non-zero elements of each row
-            set<int> &j_allocated = data[i];
-
-            // allocate memory for each row
-            OLNode *node_last = nullptr;
-            for (const auto j: j_allocated) {
-                auto *node = pool.allocate(1);
-                node->row = i;
-                node->col = j;
-                node->value = sampler.rand_real(-1., 1.);
-                // insert into row
-                if (node_last == nullptr) {
-                    row_head[i] = node;
-                } else {
-                    node_last->right = node;
-                }
-                // insert into col
-                if (col_tail.count(j) == 0) {
-                    col_head[j] = node_last;
-                } else {
-                    col_tail[j]->down = node_last;
-                }
-                col_tail[j] = node;
-                node_last = node;
+            for (const auto j: data[i]) {
+                insert(i, j, sampler.rand_real(-1., 1.));
             }
-            if (node_last != nullptr) {
-                row_tail[i] = node_last;
+        }
+
+        // refresh diagonal to make sure it is diagonal dominant
+        Real col_abs_sum_max = *std::max_element(col_abs_sum.begin(), col_abs_sum.end());
+        for (auto &iter_y: col_head) {
+            OLNode *node = iter_y.second;
+            while (node != nullptr) {
+                if (node->col == node->row) {
+                    node->value = sampler.rand_real(2.0, 5.0) * col_abs_sum[node->col];
+                    node->value *= sampler.rand_int(0, 1) ? 1 : -1;
+                    break;
+                } else if (node->row > node->col) {
+                    break;
+                }
+                node = node->down;
             }
         }
     }
