@@ -10,7 +10,7 @@ SparseVector SparseMatrix::dot(const SparseVector &x) const {
     }
 
     SparseVector y(this->n);
-#pragma omp parallel shared(y)
+#pragma omp parallel shared(y) num_threads(2)
     {
 #pragma omp single
         if (n_thread != omp_get_num_threads()) {
@@ -54,4 +54,4 @@ SparseVector SparseMatrix::dot(const SparseVector &x) const {
     return y;
 }
 
-Real Config::epsilon = 1e-3;
+Real Config::epsilon = 1e-2;

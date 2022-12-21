@@ -35,10 +35,12 @@ int main(int argc, char **argv) {
     SparseMatrix A(n, m, n_non_zero);
     LOG_INFO("Init matrix A in %.4f seconds", Timer::Toc());
 
+    Timer::Tik();
     SparseVector x(m);
     x.random();
     LOG_INFO("Init vector x in %.4f seconds", Timer::Toc());
 
+    Timer::Tik();
     SparseVector b = A.dot(x);
     LOG_INFO("Calculate vector b in %.4f seconds", Timer::Toc());
 
@@ -55,25 +57,28 @@ int main(int argc, char **argv) {
     Real rr = r.dot(r);
     Real alpha, beta;
     int iter = 0;
+    Timer::Tik();
+    auto iter_timer = Timer();
     while (sqrt(rr) > Config::epsilon) {
-//        LOG_DEBUG("p: %s", p.to_string().c_str());
-//        LOG_DEBUG("rr: %f", rr);
+        iter_timer.tik();
+//        LOG_DEBUG("Iter %04d: p: %s", iter, p.to_string().c_str());
+//        LOG_DEBUG("Iter %04d: rr: %f", iter, rr);
         Ap = A.dot(p);
-//        LOG_DEBUG("Ap: %s", Ap.to_string().c_str());
+//        LOG_DEBUG("Iter %04d: Ap: %s", iter, Ap.to_string().c_str());
         alpha = rr / p.dot(Ap);
-//        LOG_DEBUG("alpha: %f", alpha);
-//        x_star += p * (alpha * Config::lr);
+//        LOG_DEBUG("Iter %04d: alpha: %f", iter, alpha);
         x_star += p * alpha;
-//        LOG_DEBUG("x_star = %s", x_star.to_string().c_str());
+        LOG_DEBUG("Iter %04d: x_star = %s", iter, x_star.to_string().c_str());
         r -= Ap * alpha;
-//        LOG_DEBUG("r: %s", r.to_string().c_str());
+//        LOG_DEBUG("Iter %04d: r: %s", iter, r.to_string().c_str());
         Real rr_new = r.dot(r);
-//        LOG_DEBUG("rr_new: %f", rr_new);
+//        LOG_DEBUG("Iter %04d: rr_new: %f", iter, rr_new);
         beta = rr_new / rr;
-//        LOG_DEBUG("beta: %f", beta);
-//        LOG_DEBUG("p * beta: %s", (p * beta).to_string().c_str());
+//        LOG_DEBUG("Iter %04d: beta: %f", iter, beta);
+//        LOG_DEBUG("Iter %04d: p * beta: %s", iter, (p * beta).to_string().c_str());
         p = r + p * beta;
         rr = rr_new;
+        LOG_INFO("Iter %04d: %.4fs", iter, iter_timer.toc());
         ++iter;
     }
     LOG_INFO("Conjugate gradient finished in %d iterations in %.4f seconds", iter, Timer::Toc());

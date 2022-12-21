@@ -22,7 +22,6 @@ using namespace std;
 class Config {
 public:
     static Real epsilon;
-    static Real lr;
 };
 
 class SparseMatrix;
@@ -154,6 +153,7 @@ public:
         }
 
         col_abs_sum.resize(m, 0.);
+        rdata.reserve(n_non_zero);
 
         auto &sampler = RandSampler::Global();
 
