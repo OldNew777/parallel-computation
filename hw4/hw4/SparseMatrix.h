@@ -6,13 +6,12 @@
 
 #include <random>
 #include <unordered_map>
-#include <set>
+#include <unordered_set>
 #include <string>
 #include <omp.h>
 #include <format>
 
 #include "rand_sampler.h"
-#include "pool.h"
 #include "type.h"
 #include "log.h"
 
@@ -20,18 +19,10 @@
 
 using namespace std;
 
-struct OLNode {
+class Config {
 public:
-    int row = 0, col = 0;
-    Real value = 0.;
-    OLNode *right = nullptr, *down = nullptr;
-
-public:
-    [[nodiscard]] OLNode() = default;
-
-    [[nodiscard]] string to_string() const {
-        return std::format("[{}, {}, {:.4f}]", row, col, value);
-    }
+    static Real epsilon;
+    static Real lr;
 };
 
 class SparseMatrix;
@@ -46,8 +37,6 @@ public:
     }
     [[nodiscard]] SparseVector(const SparseVector &other) = default;
     [[nodiscard]] SparseVector& operator=(const SparseVector &other) = default;
-
-    [[nodiscard]] SparseVector operator*(const SparseMatrix& A) const;
 
     void random() {
         for (int i = 0; i < length; ++i) {
@@ -124,111 +113,56 @@ public:
     }
 };
 
-class Config {
+struct OLNode {
 public:
-    static Real epsilon;
-    static Real lr;
+    int row = 0, col = 0;
+    Real value = 0.;
+
+public:
+    [[nodiscard]] OLNode() = default;
+    [[nodiscard]] OLNode(const OLNode &other) = default;
+    [[nodiscard]] OLNode(OLNode &&other) noexcept = default;
+    [[nodiscard]] OLNode(int row, int col, Real value) : row(row), col(col), value(value) {}
+    OLNode& operator=(const OLNode &other) = default;
+
+    [[nodiscard]] string to_string() const {
+        return std::format("[{}, {}, {:.4f}]", row, col, value);
+    }
+};
+
+struct Range {
+    int start = 0, end = 0;
 };
 
 struct SparseMatrix {
 public:
-    unordered_map<int, OLNode *> row_head, col_head, row_tail, col_tail;
+    vector<OLNode> rdata, cdata;
+    unordered_map<int, Range> rindex, cindex;
     int n, m;
     vector<Real> col_abs_sum;
+
+    mutable vector<unordered_set<int>> rindex_threads;
+    mutable int n_thread = -1;
 
 public:
     SparseMatrix(const SparseMatrix &other) = delete;
     SparseMatrix &operator=(const SparseMatrix &other) = delete;
 
-    [[nodiscard]] SparseMatrix(int n, int m) : n(n), m(m) {
-        col_abs_sum.resize(m, 0.);
-    }
-
-    [[nodiscard]] SparseVector operator*(const SparseVector& x) const;
-
-    bool insert(int i, int j, Real value) {
-        if (i < 0 || i >= n || j < 0 || j >= m) {
-            throw runtime_error("index out of range in SparseMatrix.insert");
-        }
-        auto &pool = Pool<OLNode>::Global();
-
-        auto create_node = [&]() {
-            auto *node = pool.allocate(1);
-            node->row = i;
-            node->col = j;
-            node->value = value;
-            return node;
-        };
-        auto *node = create_node();
-        col_abs_sum[j] += fabs(value);
-
-        // insert into row
-        if (row_head.count(i) == 0) {
-            row_head[i] = node;
-            row_tail[i] = node;
-        } else if (OLNode *head = row_head[i]; head->col > j) {
-            node->right = head;
-            row_head[i] = node;
-        } else {
-            OLNode *ptr = row_head[i];
-            while (ptr->right != nullptr && ptr->right->col <= j) {
-                ptr = ptr->right;
-            }
-            // ptr->col <= j
-            if (ptr->col == j) {
-                ptr->value = value;
-                pool.deallocate(node, 1);
-                return false;
-            } else {
-                node->right = ptr->right;
-                ptr->right = node;
-                if (row_tail[i]->col < j) {
-                    row_tail[i] = node;
-                }
-            }
-        }
-
-        // insert into col
-        if (col_head.count(j) == 0) {
-            col_head[j] = node;
-            col_tail[j] = node;
-        } else if (OLNode *head = col_head[j]; head->row > i) {
-            node->down = head;
-            col_head[j] = node;
-        } else {
-            OLNode *ptr = col_head[j];
-            while (ptr->down != nullptr && ptr->down->row <= i) {
-                ptr = ptr->down;
-            }
-            // ptr->row <= i
-            if (ptr->row == i) {
-                ptr->value = value;
-                pool.deallocate(node, 1);
-                return false;
-            } else {
-                node->down = ptr->down;
-                ptr->down = node;
-                if (col_tail[j]->row < i) {
-                    col_tail[j] = node;
-                }
-            }
-        }
-
-        return true;
-    }
-
-    void random(int n_non_zero) {
+    [[nodiscard]] SparseMatrix(int n, int m, int n_non_zero) : n(n), m(m) {
         if (n_non_zero > int64_t(n) * int64_t(m)) {
             throw runtime_error("n_non_zero > n * m in SparseMatrix::random");
         }
 
-        auto &sampler = RandSampler::Global();
-        auto &pool = Pool<OLNode>::Global();
+        col_abs_sum.resize(m, 0.);
 
-        unordered_map<int, set<int>> data;
+        auto &sampler = RandSampler::Global();
+
+        unordered_map<int, unordered_set<int>> data;
         int n_diag = min(min(n, m), n_non_zero);
         for (int i = 0; i < n_diag; ++i) {
             data[i].insert(i);
+            rdata.emplace_back(OLNode{i, i, sampler.rand_real(-1., 1.)});
+            col_abs_sum[i] += fabs(rdata.back().value);
         }
         for (auto i = 0; i < n_non_zero - n_diag; ++i) {
             int row, col;
@@ -242,56 +176,73 @@ public:
                 col = (col + 1) % m;
 
             data[row].insert(col);
+            rdata.emplace_back(OLNode{row, col, sampler.rand_real(-1., 1.)});
+            col_abs_sum[col] += fabs(rdata.back().value);
         }
+        unordered_map<int, unordered_set<int>>().swap(data);
+        cdata = rdata;
 
-        // allocate memory
-        for (auto i = 0; i < n; ++i) {
-            if (!data.count(i)) {
-                continue;
+        // sort by row
+        sort(rdata.begin(), rdata.end(), [](const OLNode &a, const OLNode &b) {
+            if (a.row != b.row) {
+                return a.row < b.row;
             }
-            for (const auto j: data[i]) {
-                insert(i, j, sampler.rand_real(-1., 1.));
+            return a.col < b.col;
+        });
+        // sort by col
+        sort(cdata.begin(), cdata.end(), [](const OLNode &a, const OLNode &b) {
+            if (a.col != b.col) {
+                return a.col < b.col;
             }
-        }
+            return a.row < b.row;
+        });
 
-        // refresh diagonal to make sure it is diagonal dominant
-        Real col_abs_sum_max = *std::max_element(col_abs_sum.begin(), col_abs_sum.end());
-        for (auto &iter_y: col_head) {
-            OLNode *node = iter_y.second;
-            while (node != nullptr) {
-                if (node->col == node->row) {
-                    node->value = sampler.rand_real(2.0, 5.0) * col_abs_sum[node->col];
-                    node->value *= sampler.rand_int(0, 1) ? 1 : -1;
-                    break;
-                } else if (node->row > node->col) {
-                    break;
-                }
-                node = node->down;
+        // build index and refresh diagonal to make sure it is diagonal dominant
+        vector<Real> diag(min(n, m), 0.);
+        for (int i = 0; i < min(n, m); ++i) {
+            diag[i] = sampler.rand_real(2.0, 5.0) * col_abs_sum[i];
+        }
+        for (int i = 0; i < n_non_zero; ++i) {
+            if (rindex.count(rdata[i].row) == 0) {
+                rindex[rdata[i].row] = Range{i, i + 1};
+            } else {
+                rindex[rdata[i].row].end = i + 1;
+            }
+            if (cindex.count(cdata[i].col) == 0) {
+                cindex[cdata[i].col] = Range{i, i + 1};
+            } else {
+                cindex[cdata[i].col].end = i + 1;
+            }
+
+            if (rdata[i].row == rdata[i].col) {
+                rdata[i].value = diag[rdata[i].col];
+            }
+            if (cdata[i].row == cdata[i].col) {
+                cdata[i].value = diag[cdata[i].col];
             }
         }
+        vector<Real>().swap(diag);
     }
 
+    [[nodiscard]] SparseVector dot(const SparseVector& x) const;
+
     [[nodiscard]] string to_string() const {
-        static auto print_line = [this](const unordered_map<int, OLNode *>::const_iterator &iter_x) {
-            string line = "\nRow " + std::to_string(iter_x->first) + ": ";
+        static auto print_line = [this](int row) {
+            string line = "\nRow " + std::to_string(row) + ": ";
 #ifndef DEBUG_FULL_PRINT
             int n_print_col = 0;
-            bool break_col = false;
 #endif
-            for (auto iter_y = iter_x->second; iter_y != nullptr; iter_y = iter_y->right) {
-                line += iter_y->to_string() + " ";
+            Range row_range = rindex.at(row);
+            for (int i = row_range.start; i < row_range.end; ++i) {
+                line += rdata.at(i).to_string() + " ";
 #ifndef DEBUG_FULL_PRINT
-                if (++n_print_col >= 3) {
-                    break_col = true;
+                if (++n_print_col >= 3)
                     break;
-                }
 #endif
             }
 #ifndef DEBUG_FULL_PRINT
-            // FIXME: maybe we have printed all cols before
-            if (break_col && n_print_col < m) {
-                auto iter_y = row_tail.at(iter_x->first);
-                line += "... " + iter_y->to_string();
+            if (n_print_col < row_range.end - row_range.start) {
+                line += "... " + rdata.at(row_range.end - 1).to_string();
             }
 #endif
             return line;
@@ -300,25 +251,20 @@ public:
         string s;
 #ifndef DEBUG_FULL_PRINT
         int n_print_row = 0;
-        bool break_row = false;
 #endif
-        for (auto iter_x = row_head.begin(); iter_x != row_head.end(); ++iter_x) {
-            s += print_line(iter_x);
+        for (const auto & [row, row_range] : rindex) {
+            s += print_line(row);
 #ifndef DEBUG_FULL_PRINT
-            if (++n_print_row >= 3) {
-                break_row = true;
+            if (++n_print_row >= 3)
                 break;
-            }
 #endif
         }
 #ifndef DEBUG_FULL_PRINT
-        // FIXME: maybe we have printed all rows before
-        if (break_row && n_print_row < n) {
-            auto iter_x = row_head.begin();
-            std::advance(iter_x, n - 1);
-            s += "\n..." + print_line(iter_x);
+        if (n_print_row < rindex.size()) {
+            s += "\n...";
         }
 #endif
+
         return s;
     }
 };

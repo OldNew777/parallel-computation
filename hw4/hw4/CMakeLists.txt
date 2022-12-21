@@ -16,7 +16,6 @@ set(MAIN_SOURCES
         log.h log.cpp
         SparseMatrix.h SparseMatrix.cpp
         timer.h timer.cpp
-        pool.h
         rand_sampler.h
         type.h
         cxxopts.hpp)

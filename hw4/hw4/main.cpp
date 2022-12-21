@@ -32,24 +32,24 @@ int main(int argc, char **argv) {
     parse_args(argc, argv);
 
     Timer::Tik();
-    SparseMatrix A(n, m);
-    A.random(n_non_zero);
+    SparseMatrix A(n, m, n_non_zero);
     LOG_INFO("Init matrix A in %.4f seconds", Timer::Toc());
 
     SparseVector x(m);
     x.random();
     LOG_INFO("Init vector x in %.4f seconds", Timer::Toc());
 
-    SparseVector b = A * x;
+    SparseVector b = A.dot(x);
     LOG_INFO("Calculate vector b in %.4f seconds", Timer::Toc());
 
     LOG_INFO("A: %s", A.to_string().c_str());
     LOG_INFO("x: %s", x.to_string().c_str());
     LOG_INFO("b: %s", b.to_string().c_str());
 
-//    SparseVector x_star = x + 0.1;
     SparseVector x_star(A.m);
-    SparseVector r = b - A * x_star;
+    x_star.random();
+    LOG_INFO("x0: %s", x_star.to_string().c_str());
+    SparseVector r = b - A.dot(x_star);
     SparseVector p = r;
     SparseVector Ap(m);
     Real rr = r.dot(r);
@@ -58,13 +58,13 @@ int main(int argc, char **argv) {
     while (sqrt(rr) > Config::epsilon) {
 //        LOG_DEBUG("p: %s", p.to_string().c_str());
 //        LOG_DEBUG("rr: %f", rr);
-        Ap = A * p;
+        Ap = A.dot(p);
 //        LOG_DEBUG("Ap: %s", Ap.to_string().c_str());
         alpha = rr / p.dot(Ap);
 //        LOG_DEBUG("alpha: %f", alpha);
 //        x_star += p * (alpha * Config::lr);
         x_star += p * alpha;
-        LOG_DEBUG("x_star = %s", x_star.to_string().c_str());
+//        LOG_DEBUG("x_star = %s", x_star.to_string().c_str());
         r -= Ap * alpha;
 //        LOG_DEBUG("r: %s", r.to_string().c_str());
         Real rr_new = r.dot(r);
