@@ -48,12 +48,12 @@ int main(int argc, char **argv) {
     LOG_INFO("x: %s", x.to_string().c_str());
     LOG_INFO("b: %s", b.to_string().c_str());
 
-    SparseVector x_star(A.m);
+    SparseVector x_star(A.m);           // m * 1
     x_star.random();
     LOG_INFO("x0: %s", x_star.to_string().c_str());
-    SparseVector r = b - A.dot(x_star);
-    SparseVector p = r;
-    SparseVector Ap(m);
+    SparseVector r = b - A.dot(x_star); // n * 1
+    SparseVector p = r;                 // n * 1
+    SparseVector Ap(m);                 // m * 1
     Real rr = r.dot(r);
     Real alpha, beta;
     int iter = 0;
@@ -63,20 +63,20 @@ int main(int argc, char **argv) {
         iter_timer.tik();
 //        LOG_DEBUG("Iter %04d: p: %s", iter, p.to_string().c_str());
 //        LOG_DEBUG("Iter %04d: rr: %f", iter, rr);
-        Ap = A.dot(p);
+        Ap = A.dot(p);          // (n * m) * (m * 1) = n * 1
 //        LOG_DEBUG("Iter %04d: Ap: %s", iter, Ap.to_string().c_str());
-        alpha = rr / p.dot(Ap);
+        alpha = rr / p.dot(Ap); // (1 * 1) / ((1 * n) * (n * 1)) = 1
 //        LOG_DEBUG("Iter %04d: alpha: %f", iter, alpha);
-        x_star += p * alpha;
+        x_star += p * alpha;    // n * 1
         LOG_DEBUG("Iter %04d: x_star = %s", iter, x_star.to_string().c_str());
-        r -= Ap * alpha;
+        r -= Ap * alpha;        // n * 1
 //        LOG_DEBUG("Iter %04d: r: %s", iter, r.to_string().c_str());
-        Real rr_new = r.dot(r);
+        Real rr_new = r.dot(r); // 1 * n * n * 1 = 1 * 1
 //        LOG_DEBUG("Iter %04d: rr_new: %f", iter, rr_new);
         beta = rr_new / rr;
 //        LOG_DEBUG("Iter %04d: beta: %f", iter, beta);
 //        LOG_DEBUG("Iter %04d: p * beta: %s", iter, (p * beta).to_string().c_str());
-        p = r + p * beta;
+        p = r + p * beta;       // n * 1
         rr = rr_new;
         LOG_INFO("Iter %04d: %.4fs", iter, iter_timer.toc());
         ++iter;
