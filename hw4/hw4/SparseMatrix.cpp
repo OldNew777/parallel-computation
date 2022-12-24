@@ -54,6 +54,6 @@ Vector SparseMatrix::dot(const Vector &x) const {
     return y;
 }
 
-Real Config::epsilon = 1e-2;
+Real Config::epsilon = 1e-3;
 int Config::n_threads = 2;
 vector<Range> Config::for_parallel;

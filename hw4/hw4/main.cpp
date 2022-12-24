@@ -30,16 +30,18 @@ int parse_args(int argc, char *argv[]) {
 
 int main(int argc, char **argv) {
     parse_args(argc, argv);
+    Config::epsilon = 1e-3;
+    Config::n_threads = 1;
 
     Config::init_for_parallel(n, Config::for_parallel);
 
-    SparseMatrix A(n, n, n_non_zero);
-    // save for test
-    A.save_to_file("Matrix_A.txt");
-    exit(0);
+//    SparseMatrix A(n, n, n_non_zero);
+//    // save for test
+//    A.save_to_file("Matrix_A.txt");
+//    exit(0);
 
-//    // load for test
-//    SparseMatrix A("Matrix_A.txt");
+    // load for test
+    SparseMatrix A("Matrix_A.txt");
 
     Vector x(n);
     x.random();

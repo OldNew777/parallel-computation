@@ -485,12 +485,13 @@ public:
         fout.write((const char *)&n_non_zero, sizeof(n_non_zero));
         fout.write((const char *)rdata.data(), sizeof(OLNode) * n_non_zero);
         fout.write((const char *)cdata.data(), sizeof(OLNode) * n_non_zero);
-        fout.write((const char *)rindex.size(), sizeof(rindex.size()));
+        size_t rindex_size = rindex.size(), cindex_size = cindex.size();
+        fout.write((const char *)&rindex_size, sizeof(rindex_size));
         for (const auto & [row, range] : rindex) {
             fout.write((const char *)&row, sizeof(row));
             fout.write((const char *)&range, sizeof(range));
         }
-        fout.write((const char *)cindex.size(), sizeof(cindex.size()));
+        fout.write((const char *)&cindex_size, sizeof(cindex_size));
         for (const auto & [col, range] : cindex) {
             fout.write((const char *)&col, sizeof(col));
             fout.write((const char *)&range, sizeof(range));
