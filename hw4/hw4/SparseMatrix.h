@@ -59,11 +59,43 @@ public:
     vector<Real> val;
 
 public:
-    [[nodiscard]] Vector(int length, Real value = 0.) : length(length) {
+    [[nodiscard]] explicit Vector(int length, Real value = 0.) : length(length) {
         val.resize(length, value);
     }
-    [[nodiscard]] Vector(const Vector &other) = default;
-    [[nodiscard]] Vector& operator=(const Vector &other) = default;
+    [[nodiscard]] Vector(const Vector &other) {
+        length = other.length;
+        val.resize(length);
+#pragma omp parallel num_threads(Config::n_threads)
+        {
+            int id = omp_get_thread_num();
+            const auto &range = Config::for_parallel[id];
+            for (int i = range.start; i < range.end; ++i) {
+                val[i] = other.val[i];
+            }
+        }
+    }
+    [[nodiscard]] Vector(Vector &&other) noexcept {
+        length = other.length;
+        val = move(other.val);
+    }
+    [[nodiscard]] Vector& operator=(const Vector &other) {
+        length = other.length;
+        val.resize(length);
+#pragma omp parallel num_threads(Config::n_threads)
+        {
+            int id = omp_get_thread_num();
+            const auto &range = Config::for_parallel[id];
+            for (int i = range.start; i < range.end; ++i) {
+                val[i] = other.val[i];
+            }
+        }
+        return *this;
+    }
+    [[nodiscard]] Vector& operator=(Vector &&other) noexcept {
+        length = other.length;
+        val = move(other.val);
+        return *this;
+    }
 
     void random() {
         for (int i = 0; i < length; ++i) {

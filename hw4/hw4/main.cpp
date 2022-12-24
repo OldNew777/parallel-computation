@@ -56,37 +56,37 @@ int main(int argc, char **argv) {
     Vector p = r;                 // (n * 1)
     Vector Ap(n);                 // (n * 1)
     Real rr = r.dot(r);
-    Real alpha, beta;
+
     int iter = 0;
     Timer::Tik();
     auto iter_timer = Timer();
-#pragma omp parallel
-    {
-        while (sqrt(rr) > Config::epsilon) {
-            iter_timer.tik();
-//        LOG_DEBUG("Iter %04d: p: %s", iter, p.to_string().c_str());
-//        LOG_DEBUG("Iter %04d: rr: %f", iter, rr);
-            Ap = A.dot(p);          // (n * n) * (n * 1) = n * 1
-//        LOG_DEBUG("Iter %04d: Ap: %s", iter, Ap.to_string().c_str());
-            alpha = rr / p.dot(Ap); // (1 * 1) / ((1 * n) * (n * 1)) = 1
-            // TODO: sync p.dot(Ap)
-//        LOG_DEBUG("Iter %04d: alpha: %f", iter, alpha);
-            x_star += p * alpha;    // (n * 1) * 1
-            LOG_DEBUG("Iter %04d: x_star = %s", iter, x_star.to_string().c_str());
-            r -= Ap * alpha;        // (n * 1) * 1
-//        LOG_DEBUG("Iter %04d: r: %s", iter, r.to_string().c_str());
-            // TODO: sync r
-            Real rr_new = r.dot(r); // (1 * n) * (n * 1) = 1
-//        LOG_DEBUG("Iter %04d: rr_new: %f", iter, rr_new);
-            beta = rr_new / rr;
-//        LOG_DEBUG("Iter %04d: beta: %f", iter, beta);
-//        LOG_DEBUG("Iter %04d: p * beta: %s", iter, (p * beta).to_string().c_str());
-            // TODO: barrier
-            p = r + p * beta;       // (n * 1) * 1
-            rr = rr_new;
-//            LOG_INFO("Iter %04d: %.4fs", iter, iter_timer.toc());
-            ++iter;
-        }
+    while (sqrt(rr) > Config::epsilon) {
+        iter_timer.tik();
+//            LOG_DEBUG("Iter %04d: p: %s", iter, p.to_string().c_str());
+//            LOG_DEBUG("Iter %04d: rr: %f", iter, rr);
+        Ap = A.dot(p);          // (n * n) * (n * 1) = n * 1
+//            LOG_DEBUG("Iter %04d: Ap: %s", iter, Ap.to_string().c_str());
+        Real pAp = p.dot(Ap);   // (1 * n) * (n * 1) = 1
+        Real alpha = rr / pAp;
+//            LOG_DEBUG("Iter %04d: alpha: %f", iter, alpha);
+        Vector p_alpha = p * alpha; // (n * 1) * 1
+        x_star += p_alpha;          // (n * 1) + (n * 1) = (n * 1)
+        LOG_DEBUG("Iter %04d: x_star = %s", iter, x_star.to_string().c_str());
+        Vector Ap_alpha = Ap * alpha;   // (n * 1) * 1
+        r -= Ap_alpha;                  // (n * 1) - (n * 1) = (n * 1)
+//            LOG_DEBUG("Iter %04d: r: %s", iter, r.to_string().c_str());
+        Real rr_new = r.dot(r); // (1 * n) * (n * 1) = 1
+//            LOG_DEBUG("Iter %04d: rr_new: %f", iter, rr_new);
+        Real beta = rr_new / rr;
+//            LOG_DEBUG("Iter %04d: beta: %f", iter, beta);
+        Vector p_beta = p * beta;   // (n * 1) * 1
+//            LOG_DEBUG("Iter %04d: p * beta: %s", iter, (p * beta).to_string().c_str());
+        p = r + p_beta;             // (n * 1) + (n * 1) = (n * 1)
+        rr = rr_new;
+        LOG_INFO("Iter %04d: %.4fs", iter, iter_timer.toc());
+        ++iter;
+        if (iter == 2)
+            break;
     }
     LOG_INFO("Conjugate gradient finished in %d iterations in %.4f seconds", iter, Timer::Toc());
     LOG_INFO("x = %s", x.to_string().c_str());
