@@ -15,8 +15,8 @@ int parse_args(int argc, char *argv[]) {
             "Sparse Matrix Conjugate Gradient",
             "Calculate the solution of Ax = b by conjugate gradient method, with A being a sparse matrix.");
     options.add_options()
-            ("n", "Dimension n of matrix A", cxxopts::value<int>(n)->default_value("1000"))
-            ("n_non_zero", "Number of non-zero values in A", cxxopts::value<size_t>(n_non_zero)->default_value("1000"))
+            ("n", "Dimension n of matrix A", cxxopts::value<int>(n)->default_value("1000000"))
+            ("n_non_zero", "Number of non-zero values in A", cxxopts::value<size_t>(n_non_zero)->default_value("20000000"))
             ("threads", "Number of threads", cxxopts::value<int>(Config::n_threads)->default_value(to_string(Config::n_threads)))
             ("h,help", "Print help");
     auto result = options.parse(argc, argv);
@@ -34,13 +34,13 @@ int main(int argc, char **argv) {
     parse_args(argc, argv);
     Config::init_for_parallel(n, Config::for_parallel);
 
-//    SparseMatrix A(n, n, n_non_zero);
+    SparseMatrix A(n, n, n_non_zero);
 //    // save for test
 //    A.save_to_file("Matrix_A.txt");
 //    exit(0);
-
-    // load for test
-    SparseMatrix A("Matrix_A.txt");
+//
+//    // load for test
+//    SparseMatrix A("Matrix_A.txt");
 
     Vector x(n);
     x.random();
