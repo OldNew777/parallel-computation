@@ -11,10 +11,12 @@
 #include <string>
 #include <omp.h>
 #include <format>
+#include <fstream>
 
 #include "rand_sampler.h"
 #include "type.h"
 #include "log.h"
+#include "timer.h"
 
 //#define DEBUG_FULL_PRINT
 
@@ -31,21 +33,21 @@ public:
     static int n_threads;
     static vector<Range> for_parallel;
 
-    static void init_for_parallel(int n) {
+    static void init_for_parallel(size_t n, vector<Range> &rindex) {
         Real n_avg = (Real) n / n_threads;
-        for_parallel.resize(n_threads);
-        for_parallel[0].start = 0;
-        for_parallel[0].end = 0;
+        rindex.resize(n_threads);
+        rindex[0].start = 0;
+        rindex[0].end = 0;
         int thread_id_now = 0;
         int n_now = 0;
-        for (int i = 0; i < n; ++i) {
-            if (n_now > n_avg and thread_id_now < n_threads - 1) {
+        for (auto i = 0; i < n; ++i) {
+            if (n_now >= n_avg and thread_id_now < n_threads - 1) {
                 thread_id_now++;
                 n_now = 0;
-                for_parallel[thread_id_now].start = i;
-                for_parallel[thread_id_now].end = i;
+                rindex[thread_id_now].start = i;
+                rindex[thread_id_now].end = i;
             }
-            for_parallel[thread_id_now].end++;
+            rindex[thread_id_now].end++;
             n_now++;
         }
     }
@@ -63,20 +65,7 @@ public:
         val.resize(length, value);
     }
     [[nodiscard]] Vector(const Vector &other) {
-        length = other.length;
-        val.resize(length);
-#pragma omp parallel num_threads(Config::n_threads)
-        {
-            int id = omp_get_thread_num();
-            const auto &range = Config::for_parallel[id];
-            for (int i = range.start; i < range.end; ++i) {
-                val[i] = other.val[i];
-            }
-        }
-    }
-    [[nodiscard]] Vector(Vector &&other) noexcept {
-        length = other.length;
-        val = move(other.val);
+        *this = other;
     }
     [[nodiscard]] Vector& operator=(const Vector &other) {
         length = other.length;
@@ -91,11 +80,8 @@ public:
         }
         return *this;
     }
-    [[nodiscard]] Vector& operator=(Vector &&other) noexcept {
-        length = other.length;
-        val = move(other.val);
-        return *this;
-    }
+    [[nodiscard]] Vector(Vector &&other) noexcept = default;
+    [[nodiscard]] Vector& operator=(Vector &&other) noexcept = default;
 
     void random() {
         for (int i = 0; i < length; ++i) {
@@ -337,7 +323,7 @@ public:
     }
 };
 
-struct SparseMatrix {
+class SparseMatrix {
 public:
     vector<OLNode> rdata, cdata;
     unordered_map<int, Range> rindex, cindex;
@@ -351,23 +337,32 @@ public:
     SparseMatrix(const SparseMatrix &other) = delete;
     SparseMatrix &operator=(const SparseMatrix &other) = delete;
 
-    [[nodiscard]] SparseMatrix(int n, int m, int n_non_zero) : n(n), m(m) {
+    [[nodiscard]] SparseMatrix() = default;
+    [[nodiscard]] SparseMatrix(const string &filename) {
+        load_from_file(filename);
+    }
+
+    [[nodiscard]] SparseMatrix(int n, int m, size_t n_non_zero) : n(n), m(m) {
         if (n_non_zero > int64_t(n) * int64_t(m)) {
             throw runtime_error("n_non_zero > n * m in SparseMatrix::random");
         }
 
+        Timer::Tik();
+        LOG_INFO("Generating random sparse matrix (%d*%d) with %d non-zero elements...", n, m, n_non_zero);
         col_abs_sum.resize(m, 0.);
-        rdata.reserve(n_non_zero);
+        rdata.resize(n_non_zero);
 
         auto &sampler = RandSampler::Global();
 
         unordered_map<int, unordered_set<int>> data;
-        int n_diag = min(min(n, m), n_non_zero);
+        int n_diag = min(size_t(min(n, m)), n_non_zero);
         for (int i = 0; i < n_diag; ++i) {
             data[i].insert(i);
-            rdata.emplace_back(OLNode{i, i, sampler.rand_real(-1., 1.)});
-            col_abs_sum[i] += fabs(rdata.back().value);
+            auto &&node = OLNode{i, i, sampler.rand_real(-1., 1.)};
+            col_abs_sum[i] += fabs(node.value);
+            rdata[i] = node;
         }
+
         for (auto i = 0; i < n_non_zero - n_diag; ++i) {
             int row, col;
 
@@ -379,9 +374,16 @@ public:
             while (data[row].count(col))
                 col = (col + 1) % m;
 
+//            // Method 2: reject sampling
+//            do {
+//                row = sampler.rand_int(0, n - 1);
+//                col = sampler.rand_int(0, m - 1);
+//            } while (data[row].count(col));
+
             data[row].insert(col);
-            rdata.emplace_back(OLNode{row, col, sampler.rand_real(-1., 1.)});
-            col_abs_sum[col] += fabs(rdata.back().value);
+            auto &&node = OLNode{row, col, sampler.rand_real(-1., 1.)};
+            col_abs_sum[col] += fabs(node.value);
+            rdata[i + n_diag] = node;
         }
         unordered_map<int, unordered_set<int>>().swap(data);
         cdata = rdata;
@@ -426,6 +428,7 @@ public:
             }
         }
         vector<Real>().swap(diag);
+        LOG_INFO("SparseMatrix::random: %.4fs", Timer::Toc());
     }
 
     [[nodiscard]] Vector dot(const Vector& x) const;
@@ -470,5 +473,66 @@ public:
 #endif
 
         return s;
+    }
+
+    void save_to_file(const string &filename) const {
+        Timer::Tik();
+        LOG_INFO("Start to save matrix A(%d*%d) with %d non-zero elements", n, m, rdata.size());
+        size_t n_non_zero = rdata.size();
+        ofstream fout(filename, ios::out | ios::binary);
+        fout.write((const char *)&n, sizeof(n));
+        fout.write((const char *)&m, sizeof(m));
+        fout.write((const char *)&n_non_zero, sizeof(n_non_zero));
+        fout.write((const char *)rdata.data(), sizeof(OLNode) * n_non_zero);
+        fout.write((const char *)cdata.data(), sizeof(OLNode) * n_non_zero);
+        fout.write((const char *)rindex.size(), sizeof(rindex.size()));
+        for (const auto & [row, range] : rindex) {
+            fout.write((const char *)&row, sizeof(row));
+            fout.write((const char *)&range, sizeof(range));
+        }
+        fout.write((const char *)cindex.size(), sizeof(cindex.size()));
+        for (const auto & [col, range] : cindex) {
+            fout.write((const char *)&col, sizeof(col));
+            fout.write((const char *)&range, sizeof(range));
+        }
+        fout.close();
+        LOG_INFO("Save matrix (%d*%d) in %.4fs", n, m, Timer::Toc());
+    }
+
+    void load_from_file(const string &filename) {
+        Timer::Tik();
+        ifstream fin(filename, ios::in | ios::binary);
+        if (!fin.is_open()) {
+            LOG_ERROR("Cannot open file %s", filename.c_str());
+            exit(1);
+        }
+        size_t n_non_zero;
+        fin.read((char *)&n, sizeof(n));
+        fin.read((char *)&m, sizeof(m));
+        fin.read((char *)&n_non_zero, sizeof(n_non_zero));
+        LOG_INFO("Start to load matrix (%d*%d) with %d non-zero elements", n, m, n_non_zero);
+        rdata.resize(n_non_zero);
+        cdata.resize(n_non_zero);
+        fin.read((char *)rdata.data(), sizeof(OLNode) * n_non_zero);
+        fin.read((char *)cdata.data(), sizeof(OLNode) * n_non_zero);
+        size_t rindex_size, cindex_size;
+        fin.read((char *)&rindex_size, sizeof(rindex_size));
+        for (int i = 0; i < rindex_size; ++i) {
+            int row;
+            Range range;
+            fin.read((char *)&row, sizeof(row));
+            fin.read((char *)&range, sizeof(range));
+            rindex[row] = range;
+        }
+        fin.read((char *)&cindex_size, sizeof(cindex_size));
+        for (int i = 0; i < cindex_size; ++i) {
+            int col;
+            Range range;
+            fin.read((char *)&col, sizeof(col));
+            fin.read((char *)&range, sizeof(range));
+            cindex[col] = range;
+        }
+        fin.close();
+        LOG_INFO("Load matrix (%d*%d) in %.4fs", n, m, Timer::Toc());
     }
 };

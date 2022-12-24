@@ -9,7 +9,8 @@
 #include "SparseMatrix.h"
 #include "cxxopts.hpp"
 
-int n, n_non_zero;
+int n;
+size_t n_non_zero;
 
 int parse_args(int argc, char *argv[]) {
     cxxopts::Options options(
@@ -17,7 +18,7 @@ int parse_args(int argc, char *argv[]) {
             "Calculate the solution of Ax = b by conjugate gradient method, with A being a sparse matrix.");
     options.add_options()
             ("n", "Dimension n of matrix A", cxxopts::value<int>(n)->default_value("1000"))
-            ("n_non_zero", "Number of non-zero values in A", cxxopts::value<int>(n_non_zero)->default_value("1000"))
+            ("n_non_zero", "Number of non-zero values in A", cxxopts::value<size_t>(n_non_zero)->default_value("1000"))
             ("h,help", "Print help");
     auto result = options.parse(argc, argv);
     if (result.count("help")) {
@@ -30,16 +31,18 @@ int parse_args(int argc, char *argv[]) {
 int main(int argc, char **argv) {
     parse_args(argc, argv);
 
-    Config::init_for_parallel(n);
+    Config::init_for_parallel(n, Config::for_parallel);
 
-    Timer::Tik();
     SparseMatrix A(n, n, n_non_zero);
-    LOG_INFO("Init matrix A in %.4f seconds", Timer::Toc());
+    // save for test
+    A.save_to_file("Matrix_A.txt");
+    exit(0);
 
-    Timer::Tik();
+//    // load for test
+//    SparseMatrix A("Matrix_A.txt");
+
     Vector x(n);
     x.random();
-    LOG_INFO("Init vector x in %.4f seconds", Timer::Toc());
 
     Timer::Tik();
     Vector b = A.dot(x);
@@ -49,7 +52,7 @@ int main(int argc, char **argv) {
     LOG_INFO("x: %s", x.to_string().c_str());
     LOG_INFO("b: %s", b.to_string().c_str());
 
-    Vector x_star(A.m);           // (m * 1)
+    Vector x_star(n);             // (n * 1)
     x_star.random();
     LOG_INFO("x0: %s", x_star.to_string().c_str());
     Vector r = b - A.dot(x_star); // (n * 1)
@@ -71,7 +74,6 @@ int main(int argc, char **argv) {
 //            LOG_DEBUG("Iter %04d: alpha: %f", iter, alpha);
         Vector p_alpha = p * alpha; // (n * 1) * 1
         x_star += p_alpha;          // (n * 1) + (n * 1) = (n * 1)
-        LOG_DEBUG("Iter %04d: x_star = %s", iter, x_star.to_string().c_str());
         Vector Ap_alpha = Ap * alpha;   // (n * 1) * 1
         r -= Ap_alpha;                  // (n * 1) - (n * 1) = (n * 1)
 //            LOG_DEBUG("Iter %04d: r: %s", iter, r.to_string().c_str());
@@ -83,10 +85,8 @@ int main(int argc, char **argv) {
 //            LOG_DEBUG("Iter %04d: p * beta: %s", iter, (p * beta).to_string().c_str());
         p = r + p_beta;             // (n * 1) + (n * 1) = (n * 1)
         rr = rr_new;
-        LOG_INFO("Iter %04d: %.4fs", iter, iter_timer.toc());
+        LOG_INFO("Iter %04d (%.4fs), x: %s", iter, iter_timer.toc(), x_star.to_string().c_str());
         ++iter;
-        if (iter == 2)
-            break;
     }
     LOG_INFO("Conjugate gradient finished in %d iterations in %.4f seconds", iter, Timer::Toc());
     LOG_INFO("x = %s", x.to_string().c_str());
