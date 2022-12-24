@@ -44,6 +44,7 @@ def conjugate_gradient(A, b, x0, tol=1e-4):
         p = r + beta * p
         rr = rr_new
         iter += 1
+        break
     return x
 
 
@@ -83,10 +84,17 @@ def gradient_descent(A, b, x0, tol=1e-4):
 
 
 if __name__ == '__main__':
-    A = np.array([[0., -0.6027769223047823], [0.16918873018451275, 0.]], dtype=np.float64)
-    b = np.array([0.2777729740695085, 0.014353244778358086], dtype=np.float64)
-    x0 = np.array([0.08483570248860439, -0.46082217780902046], dtype=np.float64) + 0.1
+    n = 100
+    m = 10
+    A = np.array(np.random.rand(n, m), dtype=np.float64)
+    b = np.array(np.random.rand(n), dtype=np.float64)
+    x0 = np.array(np.random.rand(m), dtype=np.float64)
     print(conjugate_gradient(A, b, x0))
+
+    # A = np.array([[0., -0.6027769223047823], [0.16918873018451275, 0.]], dtype=np.float64)
+    # b = np.array([0.2777729740695085, 0.014353244778358086], dtype=np.float64)
+    # x0 = np.array([0.08483570248860439, -0.46082217780902046], dtype=np.float64) + 0.1
+    # print(conjugate_gradient(A, b, x0))
     # print(gradient_descent(A, b, x0))
     
     # A = np.array([[0.4, 0.1], [0.1, 0.3]], dtype=np.float64)

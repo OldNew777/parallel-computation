@@ -5,6 +5,7 @@
 #pragma once
 
 #include <random>
+#include <map>
 #include <unordered_map>
 #include <unordered_set>
 #include <string>
@@ -19,23 +20,50 @@
 
 using namespace std;
 
+
+struct Range {
+    int start = 0, end = 0;
+};
+
 class Config {
 public:
     static Real epsilon;
+    static int n_threads;
+    static vector<Range> for_parallel;
+
+    static void init_for_parallel(int n) {
+        Real n_avg = (Real) n / n_threads;
+        for_parallel.resize(n_threads);
+        for_parallel[0].start = 0;
+        for_parallel[0].end = 0;
+        int thread_id_now = 0;
+        int n_now = 0;
+        for (int i = 0; i < n; ++i) {
+            if (n_now > n_avg and thread_id_now < n_threads - 1) {
+                thread_id_now++;
+                n_now = 0;
+                for_parallel[thread_id_now].start = i;
+                for_parallel[thread_id_now].end = i;
+            }
+            for_parallel[thread_id_now].end++;
+            n_now++;
+        }
+    }
 };
 
 class SparseMatrix;
 
-struct SparseVector {
+class Vector {
 public:
     int length = 0;
     vector<Real> val;
 
-    [[nodiscard]] explicit SparseVector(int length, Real value = 0.) : length(length) {
+public:
+    [[nodiscard]] Vector(int length, Real value = 0.) : length(length) {
         val.resize(length, value);
     }
-    [[nodiscard]] SparseVector(const SparseVector &other) = default;
-    [[nodiscard]] SparseVector& operator=(const SparseVector &other) = default;
+    [[nodiscard]] Vector(const Vector &other) = default;
+    [[nodiscard]] Vector& operator=(const Vector &other) = default;
 
     void random() {
         for (int i = 0; i < length; ++i) {
@@ -43,52 +71,200 @@ public:
         }
     }
 
-#define _SPARSE_VECTOR_OPERATOR(op)                                                                 \
-    [[nodiscard]] SparseVector operator op(const SparseVector &other) const {                       \
-        if (length != other.length) {                                                               \
-            throw runtime_error("length != other.length in SparseVector " #op " SparseVector");     \
-        }                                                                                           \
-        SparseVector res(length);                                                                   \
-        for (int i = 0; i < length; ++i) {                                                          \
-            res.val[i] = val[i] op other.val[i];                                                    \
-        }                                                                                           \
-        return res;                                                                                 \
-    }                                                                                               \
-    SparseVector& operator op##=(const SparseVector &other) {                                       \
-        if (length != other.length) {                                                               \
-            throw runtime_error("length != other.length in SparseVector " #op " SparseVector");     \
-        }                                                                                           \
-        for (int i = 0; i < length; ++i) {                                                          \
-            val[i] op##= other.val[i];                                                              \
-        }                                                                                           \
-        return *this;                                                                               \
-    }                                                                                               \
-    [[nodiscard]] SparseVector operator op(Real a) const {                                          \
-        SparseVector res(length);                                                                   \
-        for (int i = 0; i < length; ++i) {                                                          \
-            res.val[i] = val[i] op a;                                                               \
-        }                                                                                           \
-        return res;                                                                                 \
-    }                                                                                               \
-    SparseVector& operator op##=(Real a) {                                                          \
-        for (int i = 0; i < length; ++i) {                                                          \
-            val[i] op##= a;                                                                         \
-        }                                                                                           \
-        return *this;                                                                               \
-    }
-    _SPARSE_VECTOR_OPERATOR(+)
-    _SPARSE_VECTOR_OPERATOR(-)
-    _SPARSE_VECTOR_OPERATOR(*)
-    _SPARSE_VECTOR_OPERATOR(/)
-#undef _SPARSE_VECTOR_OPERATOR
-
-    [[nodiscard]] Real dot(const SparseVector &other) const {
-        if (length != other.length) {
-            throw runtime_error("length != other.length in SparseVector.dot(SparseVector)");
+    [[nodiscard]] Vector operator +(const Vector &other) const {
+        Vector res(length);
+#pragma omp parallel shared(res) num_threads(Config::n_threads)
+        {
+            int id = omp_get_thread_num();
+            const auto &range = Config::for_parallel[id];
+            for (int i = range.start; i < range.end; ++i) {
+                res.val[i] = val[i] + other.val[i];
+            }
         }
+        return res;
+    }
+    [[nodiscard]] Vector operator -(const Vector &other) const {
+        Vector res(length);
+#pragma omp parallel shared(res) num_threads(Config::n_threads)
+        {
+            int id = omp_get_thread_num();
+            const auto &range = Config::for_parallel[id];
+            for (int i = range.start; i < range.end; ++i) {
+                res.val[i] = val[i] - other.val[i];
+            }
+        }
+        return res;
+    }
+    [[nodiscard]] Vector operator *(const Vector &other) const {
+        Vector res(length);
+#pragma omp parallel shared(res) num_threads(Config::n_threads)
+        {
+            int id = omp_get_thread_num();
+            const auto &range = Config::for_parallel[id];
+            for (int i = range.start; i < range.end; ++i) {
+                res.val[i] = val[i] * other.val[i];
+            }
+        }
+        return res;
+    }
+    [[nodiscard]] Vector operator /(const Vector &other) const {
+        Vector res(length);
+#pragma omp parallel shared(res) num_threads(Config::n_threads)
+        {
+            int id = omp_get_thread_num();
+            const auto &range = Config::for_parallel[id];
+            for (int i = range.start; i < range.end; ++i) {
+                res.val[i] = val[i] / other.val[i];
+            }
+        }
+        return res;
+    }
+    Vector& operator +=(const Vector &other) {
+#pragma omp parallel num_threads(Config::n_threads)
+        {
+            int id = omp_get_thread_num();
+            const auto &range = Config::for_parallel[id];
+            for (int i = range.start; i < range.end; ++i) {
+                val[i] += other.val[i];
+            }
+        }
+        return *this;
+    }
+    Vector& operator -=(const Vector &other) {
+#pragma omp parallel num_threads(Config::n_threads)
+        {
+            int id = omp_get_thread_num();
+            const auto &range = Config::for_parallel[id];
+            for (int i = range.start; i < range.end; ++i) {
+                val[i] -= other.val[i];
+            }
+        }
+        return *this;
+    }
+    Vector& operator *=(const Vector &other) {
+#pragma omp parallel num_threads(Config::n_threads)
+        {
+            int id = omp_get_thread_num();
+            const auto &range = Config::for_parallel[id];
+            for (int i = range.start; i < range.end; ++i) {
+                val[i] *= other.val[i];
+            }
+        }
+        return *this;
+    }
+    Vector& operator /=(const Vector &other) {
+#pragma omp parallel num_threads(Config::n_threads)
+        {
+            int id = omp_get_thread_num();
+            const auto &range = Config::for_parallel[id];
+            for (int i = range.start; i < range.end; ++i) {
+                val[i] /= other.val[i];
+            }
+        }
+        return *this;
+    }
+    [[nodiscard]] Vector operator +(Real a) const {
+        Vector res(length);
+#pragma omp parallel shared(res) num_threads(Config::n_threads)
+        {
+            int id = omp_get_thread_num();
+            const auto &range = Config::for_parallel[id];
+            for (int i = range.start; i < range.end; ++i) {
+                res.val[i] = val[i] + a;
+            }
+        }
+        return res;
+    }
+    [[nodiscard]] Vector operator -(Real a) const {
+        Vector res(length);
+#pragma omp parallel shared(res) num_threads(Config::n_threads)
+        {
+            int id = omp_get_thread_num();
+            const auto &range = Config::for_parallel[id];
+            for (int i = range.start; i < range.end; ++i) {
+                res.val[i] = val[i] - a;
+            }
+        }
+        return res;
+    }
+    [[nodiscard]] Vector operator *(Real a) const {
+        Vector res(length);
+#pragma omp parallel shared(res) num_threads(Config::n_threads)
+        {
+            int id = omp_get_thread_num();
+            const auto &range = Config::for_parallel[id];
+            for (int i = range.start; i < range.end; ++i) {
+                res.val[i] = val[i] * a;
+            }
+        }
+        return res;
+    }
+    [[nodiscard]] Vector operator /(Real a) const {
+        Vector res(length);
+#pragma omp parallel shared(res) num_threads(Config::n_threads)
+        {
+            int id = omp_get_thread_num();
+            const auto &range = Config::for_parallel[id];
+            for (int i = range.start; i < range.end; ++i) {
+                res.val[i] = val[i] / a;
+            }
+        }
+        return res;
+    }
+    Vector& operator +=(Real a) {
+#pragma omp parallel num_threads(Config::n_threads)
+        {
+            int id = omp_get_thread_num();
+            const auto &range = Config::for_parallel[id];
+            for (int i = range.start; i < range.end; ++i) {
+                val[i] += a;
+            }
+        }
+        return *this;
+    }
+    Vector& operator -=(Real a) {
+#pragma omp parallel num_threads(Config::n_threads)
+        {
+            int id = omp_get_thread_num();
+            const auto &range = Config::for_parallel[id];
+            for (int i = range.start; i < range.end; ++i) {
+                val[i] -= a;
+            }
+        }
+        return *this;
+    }
+    Vector& operator *=(Real a) {
+#pragma omp parallel num_threads(Config::n_threads)
+        {
+            int id = omp_get_thread_num();
+            const auto &range = Config::for_parallel[id];
+            for (int i = range.start; i < range.end; ++i) {
+                val[i] *= a;
+            }
+        }
+        return *this;
+    }
+    Vector& operator /=(Real a) {
+#pragma omp parallel num_threads(Config::n_threads)
+        {
+            int id = omp_get_thread_num();
+            const auto &range = Config::for_parallel[id];
+            for (int i = range.start; i < range.end; ++i) {
+                val[i] /= a;
+            }
+        }
+        return *this;
+    }
+
+    [[nodiscard]] Real dot(const Vector &other) const {
         Real res = 0.;
-        for (int i = 0; i < length; ++i) {
-            res += val[i] * other.val[i];
+#pragma omp parallel num_threads(Config::n_threads) reduction(+:res)
+        {
+            int id = omp_get_thread_num();
+            const auto &range = Config::for_parallel[id];
+            for (int i = range.start; i < range.end; ++i) {
+                res += val[i] * other.val[i];
+            }
         }
         return res;
     }
@@ -127,10 +303,6 @@ public:
     [[nodiscard]] string to_string() const {
         return std::format("[{}, {}, {:.4f}]", row, col, value);
     }
-};
-
-struct Range {
-    int start = 0, end = 0;
 };
 
 struct SparseMatrix {
@@ -224,7 +396,7 @@ public:
         vector<Real>().swap(diag);
     }
 
-    [[nodiscard]] SparseVector dot(const SparseVector& x) const;
+    [[nodiscard]] Vector dot(const Vector& x) const;
 
     [[nodiscard]] string to_string() const {
         static auto print_line = [this](int row) {

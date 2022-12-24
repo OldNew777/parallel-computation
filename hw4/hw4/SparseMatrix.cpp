@@ -4,23 +4,24 @@
 
 #include "SparseMatrix.h"
 
-SparseVector SparseMatrix::dot(const SparseVector &x) const {
+Vector SparseMatrix::dot(const Vector &x) const {
     if (this->m != x.length) {
         throw std::runtime_error("A.m != x.length in A * x");
     }
 
-    SparseVector y(this->n);
-#pragma omp parallel shared(y) num_threads(2)
+    Vector y(this->n);
+#pragma omp parallel shared(y) num_threads(Config::n_threads)
     {
 #pragma omp single
         if (n_thread != omp_get_num_threads()) {
+            // FIXME: doesnt work when n_thread changes
             auto allocate_threads = [this]() {
                 int num_threads = omp_get_num_threads();
                 LOG_INFO("%d rows allocated for %d threads", n, num_threads);
                 vector<unordered_set<int>> row_set(num_threads);
                 Real n_row_avg = (Real) rindex.size() / num_threads;
                 int thread_id_now = 0;
-                int n_row_now = 0.;
+                int n_row_now = 0;
                 int row_id_allocated = -1;
                 for (auto node : rdata) {
                     if (node.row == row_id_allocated)
@@ -38,8 +39,7 @@ SparseVector SparseMatrix::dot(const SparseVector &x) const {
             rindex_threads = allocate_threads();
             n_thread = omp_get_num_threads();
         }
-#pragma omp barrier
-        SparseVector y_private(this->n);
+        Vector y_private(this->n);
         for (const auto& [row, row_range] : this->rindex) {
             if (rindex_threads.at(omp_get_thread_num()).count(row) == 0) {
                 continue;
@@ -55,3 +55,5 @@ SparseVector SparseMatrix::dot(const SparseVector &x) const {
 }
 
 Real Config::epsilon = 1e-2;
+int Config::n_threads = 1;
+vector<Range> Config::for_parallel;
