@@ -9,9 +9,12 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <string>
-#include <omp.h>
 #include <format>
 #include <fstream>
+
+#ifdef ENABLE_PARALLEL
+#include <omp.h>
+#endif
 
 #include "rand_sampler.h"
 #include "type.h"
@@ -67,6 +70,7 @@ public:
     [[nodiscard]] Vector(const Vector &other) {
         *this = other;
     }
+#ifdef ENABLE_PARALLEL
     [[nodiscard]] Vector& operator=(const Vector &other) {
         length = other.length;
         val.resize(length);
@@ -80,6 +84,9 @@ public:
         }
         return *this;
     }
+#else
+    [[nodiscard]] Vector& operator=(const Vector &other) = default;
+#endif
     [[nodiscard]] Vector(Vector &&other) noexcept = default;
     [[nodiscard]] Vector& operator=(Vector &&other) noexcept = default;
 
@@ -89,6 +96,7 @@ public:
         }
     }
 
+#ifdef ENABLE_PARALLEL
     [[nodiscard]] Vector operator +(const Vector &other) const {
         Vector res(length);
 #pragma omp parallel shared(res) num_threads(Config::n_threads)
@@ -286,6 +294,54 @@ public:
         }
         return res;
     }
+#else
+#define _VECTOR_OPERATOR(op)                                                                 \
+    [[nodiscard]] Vector operator op(const Vector &other) const {                       \
+        if (length != other.length) {                                                               \
+            throw runtime_error("length != other.length in Vector " #op " Vector");     \
+        }                                                                                           \
+        Vector res(length);                                                                   \
+        for (int i = 0; i < length; ++i) {                                                          \
+            res.val[i] = val[i] op other.val[i];                                                    \
+        }                                                                                           \
+        return res;                                                                                 \
+    }                                                                                               \
+    Vector& operator op##=(const Vector &other) {                                       \
+        if (length != other.length) {                                                               \
+            throw runtime_error("length != other.length in Vector " #op " Vector");     \
+        }                                                                                           \
+        for (int i = 0; i < length; ++i) {                                                          \
+            val[i] op##= other.val[i];                                                              \
+        }                                                                                           \
+        return *this;                                                                               \
+    }                                                                                               \
+    [[nodiscard]] Vector operator op(Real a) const {                                          \
+        Vector res(length);                                                                   \
+        for (int i = 0; i < length; ++i) {                                                          \
+            res.val[i] = val[i] op a;                                                               \
+        }                                                                                           \
+        return res;                                                                                 \
+    }                                                                                               \
+    Vector& operator op##=(Real a) {                                                          \
+        for (int i = 0; i < length; ++i) {                                                          \
+            val[i] op##= a;                                                                         \
+        }                                                                                           \
+        return *this;                                                                               \
+    }
+    _VECTOR_OPERATOR(+)
+    _VECTOR_OPERATOR(-)
+    _VECTOR_OPERATOR(*)
+    _VECTOR_OPERATOR(/)
+#undef _VECTOR_OPERATOR
+
+    [[nodiscard]] Real dot(const Vector &other) const {
+        Real res = 0.;
+        for (int i = 0; i < length; ++i) {
+            res += val[i] * other.val[i];
+        }
+        return res;
+    }
+#endif
 
     [[nodiscard]] string to_string() const {
         string res = "[";

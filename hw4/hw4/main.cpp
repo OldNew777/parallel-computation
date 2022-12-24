@@ -2,8 +2,6 @@
 // Created by ChenXin on 2022/12/20.
 //
 
-#include <omp.h>
-
 #include "log.h"
 #include "timer.h"
 #include "SparseMatrix.h"
@@ -19,6 +17,7 @@ int parse_args(int argc, char *argv[]) {
     options.add_options()
             ("n", "Dimension n of matrix A", cxxopts::value<int>(n)->default_value("1000"))
             ("n_non_zero", "Number of non-zero values in A", cxxopts::value<size_t>(n_non_zero)->default_value("1000"))
+            ("threads", "Number of threads", cxxopts::value<int>(Config::n_threads)->default_value(to_string(Config::n_threads)))
             ("h,help", "Print help");
     auto result = options.parse(argc, argv);
     if (result.count("help")) {
@@ -29,10 +28,10 @@ int parse_args(int argc, char *argv[]) {
 }
 
 int main(int argc, char **argv) {
-    parse_args(argc, argv);
     Config::epsilon = 1e-3;
-    Config::n_threads = 1;
+    Config::n_threads = 2;
 
+    parse_args(argc, argv);
     Config::init_for_parallel(n, Config::for_parallel);
 
 //    SparseMatrix A(n, n, n_non_zero);
@@ -51,7 +50,7 @@ int main(int argc, char **argv) {
     LOG_INFO("Calculate vector b in %.4f seconds", Timer::Toc());
 
     LOG_INFO("A: %s", A.to_string().c_str());
-    LOG_INFO("x: %s", x.to_string().c_str());
+//    LOG_INFO("x: %s", x.to_string().c_str());
     LOG_INFO("b: %s", b.to_string().c_str());
 
     Vector x_star(n);             // (n * 1)
@@ -91,7 +90,7 @@ int main(int argc, char **argv) {
         ++iter;
     }
     LOG_INFO("Conjugate gradient finished in %d iterations in %.4f seconds", iter, Timer::Toc());
-    LOG_INFO("x = %s", x.to_string().c_str());
+//    LOG_INFO("x = %s", x.to_string().c_str());
     LOG_INFO("x_star = %s", x_star.to_string().c_str());
 
     return 0;

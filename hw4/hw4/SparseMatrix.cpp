@@ -10,6 +10,7 @@ Vector SparseMatrix::dot(const Vector &x) const {
     }
 
     Vector y(this->n);
+#ifdef ENABLE_PARALLEL
 #pragma omp parallel shared(y) num_threads(Config::n_threads)
     {
 #pragma omp single
@@ -39,21 +40,25 @@ Vector SparseMatrix::dot(const Vector &x) const {
             rindex_threads = allocate_threads();
             n_thread = omp_get_num_threads();
         }
-        Vector y_private(this->n);
         for (const auto& [row, row_range] : this->rindex) {
             if (rindex_threads.at(omp_get_thread_num()).count(row) == 0) {
                 continue;
             }
             for (auto j = row_range.start; j < row_range.end; ++j) {
-                y_private.val[row] += rdata[j].value * x.val[rdata[j].col];
+                y.val[row] += rdata[j].value * x.val[rdata[j].col];
             }
         }
-#pragma omp critical
-        y += y_private;
     }
+#else
+    for (const auto& [row, row_range] : this->rindex) {
+        for (auto j = row_range.start; j < row_range.end; ++j) {
+            y.val[row] += rdata[j].value * x.val[rdata[j].col];
+        }
+    }
+#endif
     return y;
 }
 
-Real Config::epsilon = 1e-3;
-int Config::n_threads = 2;
+Real Config::epsilon;
+int Config::n_threads;
 vector<Range> Config::for_parallel;
